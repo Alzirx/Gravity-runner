@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gravity Runner</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: grid; place-items: center;
+      padding: 20px; color: #eafaff; font-family: Arial, sans-serif;
+      background: radial-gradient(circle at 50% 20%, #18264d 0, #090d20 55%, #050711 100%);
+    }
+    .game-wrap { width: min(900px, 100%); }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+    h1 { margin: 0; font-size: clamp(1.5rem, 4vw, 2.4rem); letter-spacing: 4px; color: #7df9ff; text-shadow: 0 0 12px #00d9ff; }
+    .score-box { display: flex; gap: 18px; font-weight: bold; color: #c7d9ff; }
+    .score-box span { color: #fff; }
+    .screen {
+      position: relative; overflow: hidden; border: 2px solid #21dfff;
+      border-radius: 14px; box-shadow: 0 0 18px #00c8ff66, inset 0 0 25px #00c8ff18;
+      background: #070b1b;
+    }
+    canvas { display: block; width: 100%; height: auto; }
+    .overlay {
+      position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+      padding: 24px; background: #050918c9;
+    }
+    .panel { max-width: 460px; }
+    .panel h2 { margin: 0 0 10px; color: #ff63e6; font-size: clamp(1.6rem, 5vw, 2.5rem); text-shadow: 0 0 14px #ff35d4; }
+    .panel p { line-height: 1.55; color: #d4e8ff; }
+    button {
+      border: 0; border-radius: 8px; padding: 12px 24px; cursor: pointer;
+      color: #06101e; background: #7df9ff; font-size: 1rem; font-weight: 800;
+      box-shadow: 0 0 16px #00d9ff99;
+    }
+    button:hover { background: #b3fcff; transform: translateY(-1px); }
+    .hint { text-align: center; color: #9fb6d8; margin: 12px 0 0; font-size: .92rem; }
+    .key { color: #7df9ff; font-weight: bold; }
+    @media (max-width: 560px) {
+      header { align-items: flex-start; flex-direction: column; }
+      .score-box { gap: 14px; font-size: .9rem; }
+    }
+  </style>
+</head>
+<body>
+  <main class="game-wrap">
+    <header>
+      <h1>GRAVITY RUNNER</h1>
+      <div class="score-box">
+        <div>SCORE: <span id="score">0</span></div>
+        <div>BEST: <span id="best">0</span></div>
+      </div>
+    </header>
+    <section class="screen">
+      <canvas id="game" width="900" height="460" aria-label="Gravity Runner game"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="panel">
+          <h2 id="overlay-title">FLIP THE WORLD</h2>
+          <p id="overlay-text">Switch gravity to run on the floor or ceiling. Dodge the neon blocks and see how long you can last.</p>
+          <p><span class="key">SPACE</span> or tap the game to switch gravity.</p>
+          <button id="start-btn">START GAME</button>
+        </div>
+      </div>
+    </section>
+    <p class="hint">Press <span class="key">SPACE</span> to flip gravity · The game gets faster as your score grows.</p>
+  </main>
+  <script>
+    // Get the game elements from the page.
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const scoreText = document.getElementById("score");
+    const bestText = document.getElementById("best");
+    const overlay = document.getElementById("overlay");
+    const overlayTitle = document.getElementById("overlay-title");
+    const overlayText = document.getElementById("overlay-text");
+    const startBtn = document.getElementById("start-btn");
+    const WIDTH = canvas.width;
+    const HEIGHT = canvas.height;
+    const FLOOR = HEIGHT - 42;
+    const CEILING = 42;
+    let running = false;
+    let score = 0;
+    let best = Number(localStorage.getItem("gravityRunnerBest") || 0);
+    let speed = 5;
+    let spawnTimer = 0;
+    let lastTime = 0;
+    let obstacles = [];
+    let animationId = 0;
+    bestText.textContent = best;
+    // The player smoothly moves toward the opposite side when gravity flips.
+    const player = {
+      x: 125, y: FLOOR - 30, size: 30,
+      vy: 0, gravity: 0.55, direction: 1,
+      flipFlash: 0
+    };
+    function resetGame() {
+      score = 0;
+      speed = 5;
+      spawnTimer = 45;
+      obstacles = [];
+      player.y = FLOOR - player.size;
+      player.vy = 0;
+      player.direction = 1;
+      player.flipFlash = 0;
+      scoreText.textContent = score;
+    }
+    function startGame() {
+      cancelAnimationFrame(animationId);
+      resetGame();
+      running = true;
+      overlay.style.display = "none";
+      lastTime = 0;
+      animationId = requestAnimationFrame(gameLoop);
+    }
+    function endGame() {
+      running = false;
+      best = Math.max(best, score);
+      localStorage.setItem("gravityRunnerBest", best);
+      bestText.textContent = best;
+      overlayTitle.textContent = "GAME OVER";
+      overlayText.textContent = `You scored ${score}. Switch gravity earlier to avoid the next obstacle!`;
+      startBtn.textContent = "PLAY AGAIN";
+      overlay.style.display = "grid";
+    }
+    function flipGravity() {
+      if (!running) return;
+      player.direction *= -1;
+      player.flipFlash = 12;
+    }
+    // Create an obstacle on either the floor or ceiling.
+    function addObstacle() {
+      const fromFloor = Math.random() < 0.5;
+      const width = 28 + Math.random() * 18;
+      const height = 35 + Math.random() * 25;
+      obstacles.push({
+        x: WIDTH + 10,
+        y: fromFloor ? FLOOR - height : CEILING,
+        width, height,
+        passed: false
+      });
+    }
+    function update(delta) {
+      const step = Math.min(delta / 16.67, 2.2);
+      // Gravity pulls the player toward the currently selected side.
+      player.vy += player.gravity * player.direction * step;
+      player.vy = Math.max(-10, Math.min(10, player.vy));
+      player.y += player.vy * step;
+      // Stop the player at the floor or ceiling.
+      if (player.y + player.size >= FLOOR) {
+        player.y = FLOOR - player.size;
+        if (player.direction === 1) player.vy = 0;
+      }
+      if (player.y <= CEILING) {
+        player.y = CEILING;
+        if (player.direction === -1) player.vy = 0;
+      }
+      if (player.flipFlash > 0) player.flipFlash -= step;
+      // Increase speed gradually as the score rises.
+      speed = Math.min(11, 5 + score * 0.035);
+      spawnTimer -= step;
+      if (spawnTimer <= 0) {
+        addObstacle();
+        spawnTimer = Math.max(38, 92 - score * 0.35) + Math.random() * 24;
+      }
+      for (const obstacle of obstacles) {
+        obstacle.x -= speed * step;
+        if (!obstacle.passed && obstacle.x + obstacle.width < player.x) {
+          obstacle.passed = true;
+          score++;
+          scoreText.textContent = score;
+        }
+        // A small collision margin keeps the game fair.
+        const margin = 5;
+        const hit = player.x + player.size - margin > obstacle.x &&
+          player.x + margin < obstacle.x + obstacle.width &&
+          player.y + player.size - margin > obstacle.y &&
+          player.y + margin < obstacle.y + obstacle.height;
+        if (hit) {
+          endGame();
+          return;
+        }
+      }
+      obstacles = obstacles.filter(o => o.x + o.width > -10);
+    }
+    function draw() {
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
+      // Dark background and subtle neon grid.
+      ctx.fillStyle = "#080d20";
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      ctx.strokeStyle = "#17365b";
+      ctx.lineWidth = 1;
+      for (let x = 0; x < WIDTH; x += 45) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, HEIGHT); ctx.stroke();
+      }
+      for (let y = 0; y < HEIGHT; y += 45) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(WIDTH, y); ctx.stroke();
+      }
+      // Floor and ceiling glow.
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = "#00eaff";
+      ctx.fillStyle = "#00d9ff";
+      ctx.fillRect(0, 0, WIDTH, 4);
+      ctx.fillRect(0, FLOOR, WIDTH, 4);
+      ctx.shadowBlur = 0;
+      // Obstacles.
+      for (const obstacle of obstacles) {
+        ctx.shadowBlur = 16;
+        ctx.shadowColor = "#ff3bd4";
+        ctx.fillStyle = "#ff3bd4";
+        ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = "#ffd5f7";
+        ctx.strokeRect(obstacle.x + 3, obstacle.y + 3, obstacle.width - 6, obstacle.height - 6);
+      }
+      // Player: a glowing square with a short flip trail.
+      ctx.save();
+      ctx.shadowBlur = player.flipFlash > 0 ? 28 : 16;
+      ctx.shadowColor = player.flipFlash > 0 ? "#fff36b" : "#72ff9b";
+      ctx.fillStyle = player.flipFlash > 0 ? "#fff36b" : "#72ff9b";
+      ctx.fillRect(player.x, player.y, player.size, player.size);
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = "#eafff0";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(player.x + 4, player.y + 4, player.size - 8, player.size - 8);
+      ctx.restore();
+      // Small status label shows which way gravity is pulling.
+      ctx.fillStyle = "#9db8df";
+      ctx.font = "14px Arial";
+      ctx.fillText(player.direction === 1 ? "GRAVITY: FLOOR" : "GRAVITY: CEILING", 18, 27);
+    }
+    function gameLoop(timestamp) {
+      if (!running) return;
+      const delta = lastTime ? timestamp - lastTime : 16.67;
+      lastTime = timestamp;
+      update(delta);
+      draw();
+      if (running) animationId = requestAnimationFrame(gameLoop);
+    }
+    startBtn.addEventListener("click", startGame);
+    document.addEventListener("keydown", event => {
+      if (event.code === "Space") {
+        event.preventDefault();
+        if (!running && overlay.style.display !== "none") startGame();
+        else flipGravity();
+      }
+    });
+    canvas.addEventListener("pointerdown", () => {
+      if (running) flipGravity();
+    });
+    draw();
+  </script>
+</body>
+</html>
