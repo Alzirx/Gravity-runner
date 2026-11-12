@@ -82,6 +82,7 @@
     const WIN_SCORE = 20; // Reach 20 points to win the round.
     let running = false;
     let hasStarted = false;
+    let roundWon = false;
     let score = 0;
     let best = Number(localStorage.getItem("gravityRunnerBest") || 0);
     let speed = 5;
@@ -97,6 +98,7 @@
       flipFlash: 0
     };
     function resetGame() {
+      roundWon = false;
       score = 0;
       speed = 5;
       spawnTimer = 45;
@@ -134,6 +136,7 @@
       best = Math.max(best, score);
       localStorage.setItem("gravityRunnerBest", best);
       bestText.textContent = best;
+      roundWon = true;
       overlayTitle.textContent = "YOU WIN!";
       overlayText.textContent = `You reached ${WIN_SCORE} points. Great gravity switching!`;
       startBtn.textContent = "PLAY AGAIN";
@@ -248,6 +251,23 @@
       ctx.fillStyle = "#9db8df";
       ctx.font = "14px Arial";
       ctx.fillText(player.direction === 1 ? "GRAVITY: FLOOR" : "GRAVITY: CEILING", 18, 27);
+      // Draw the victory message on the canvas too, so it remains visible
+      // even if the browser fails to display the HTML overlay correctly.
+      if (roundWon) {
+        ctx.fillStyle = "rgba(5, 9, 24, 0.94)";
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+        ctx.textAlign = "center";
+        ctx.shadowBlur = 22;
+        ctx.shadowColor = "#ff63e6";
+        ctx.fillStyle = "#ff63e6";
+        ctx.font = "bold 58px Arial";
+        ctx.fillText("YOU WIN!", WIDTH / 2, HEIGHT / 2 - 12);
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#eafaff";
+        ctx.font = "bold 24px Arial";
+        ctx.fillText("You reached 20 points!", WIDTH / 2, HEIGHT / 2 + 35);
+        ctx.textAlign = "left";
+      }
     }
     function gameLoop(timestamp) {
       if (!running) return;
