@@ -23,7 +23,7 @@
     }
     canvas { display: block; width: 100%; height: auto; }
     .overlay {
-      position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+      position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; text-align: center;
       padding: 24px; background: #050918c9;
     }
     .panel { max-width: 460px; }
@@ -127,7 +127,10 @@
       overlay.style.display = "grid";
     }
     function winGame() {
+      if (!running) return;
       running = false;
+      cancelAnimationFrame(animationId);
+      animationId = 0;
       best = Math.max(best, score);
       localStorage.setItem("gravityRunnerBest", best);
       bestText.textContent = best;
@@ -251,6 +254,9 @@
       const delta = lastTime ? timestamp - lastTime : 16.67;
       lastTime = timestamp;
       update(delta);
+      // Backup win check: reaching the target always ends the round,
+      // even if the score changes during a frame with multiple obstacles.
+      if (running && score >= WIN_SCORE) winGame();
       draw();
       if (running) animationId = requestAnimationFrame(gameLoop);
     }
