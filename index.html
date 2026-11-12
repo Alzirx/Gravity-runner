@@ -57,7 +57,7 @@
       <div class="overlay" id="overlay">
         <div class="panel">
           <h2 id="overlay-title">FLIP THE WORLD</h2>
-          <p id="overlay-text">Switch gravity to run on the floor or ceiling. Dodge the neon blocks and see how long you can last.</p>
+          <p id="overlay-text">Switch gravity to run on the floor or ceiling. Dodge the neon blocks and reach 20 points to win. A collision means game over.</p>
           <p><span class="key">SPACE</span> or tap the game to switch gravity.</p>
           <button id="start-btn">START GAME</button>
         </div>
@@ -79,6 +79,7 @@
     const HEIGHT = canvas.height;
     const FLOOR = HEIGHT - 42;
     const CEILING = 42;
+    const WIN_SCORE = 20; // Reach 20 points to win the round.
     let running = false;
     let score = 0;
     let best = Number(localStorage.getItem("gravityRunnerBest") || 0);
@@ -120,6 +121,16 @@
       bestText.textContent = best;
       overlayTitle.textContent = "GAME OVER";
       overlayText.textContent = `You scored ${score}. Switch gravity earlier to avoid the next obstacle!`;
+      startBtn.textContent = "PLAY AGAIN";
+      overlay.style.display = "grid";
+    }
+    function winGame() {
+      running = false;
+      best = Math.max(best, score);
+      localStorage.setItem("gravityRunnerBest", best);
+      bestText.textContent = best;
+      overlayTitle.textContent = "YOU WIN!";
+      overlayText.textContent = `You reached ${WIN_SCORE} points. Great gravity switching!`;
       startBtn.textContent = "PLAY AGAIN";
       overlay.style.display = "grid";
     }
@@ -169,6 +180,10 @@
           obstacle.passed = true;
           score++;
           scoreText.textContent = score;
+          if (score >= WIN_SCORE) {
+            winGame();
+            return;
+          }
         }
         // A small collision margin keeps the game fair.
         const margin = 5;
