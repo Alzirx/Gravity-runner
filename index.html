@@ -81,6 +81,7 @@
     const CEILING = 42;
     const WIN_SCORE = 20; // Reach 20 points to win the round.
     let running = false;
+    let hasStarted = false;
     let score = 0;
     let best = Number(localStorage.getItem("gravityRunnerBest") || 0);
     let speed = 5;
@@ -108,6 +109,7 @@
     }
     function startGame() {
       cancelAnimationFrame(animationId);
+      hasStarted = true;
       resetGame();
       running = true;
       overlay.style.display = "none";
@@ -256,7 +258,9 @@
     document.addEventListener("keydown", event => {
       if (event.code === "Space") {
         event.preventDefault();
-        if (!running && overlay.style.display !== "none") startGame();
+        // Ignore held-key repeats so a win/game-over screen cannot instantly restart.
+        if (event.repeat) return;
+        if (!running && !hasStarted) startGame();
         else flipGravity();
       }
     });
